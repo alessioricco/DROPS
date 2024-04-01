@@ -1,5 +1,5 @@
 # DROPS
-Distributed Realtime Objects Processor Server
+low latency - Distributed Realtime Objects Processor Server
 
 
 # Project Overview
