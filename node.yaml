@@ -1,0 +1,28 @@
+node:
+  host: "127.0.0.1"
+  port: 1969
+
+directory_services:
+  - host: "127.0.0.1"
+    port: 1512
+
+security:
+  tls_enabled: false
+  tls_cert_path: "./config/node/certificate.pem"
+  tls_key_path: "./config/node/key.pem"
+
+logging:
+  level: "INFO"
+  file: "./config/node/node.log"
+
+cache_settings:
+  max_size: 1024  # In MB
+  eviction_policy: "LRU"
+
+task_settings:
+  max_concurrent_tasks: 5
+  task_timeout: 120  # In seconds
+
+discovery:
+  gossip_interval: 30  # How often to gossip with other nodes, in seconds
+  known_nodes_refresh_interval: 300  # How often to refresh the list of known nodes from the directory service, in seconds

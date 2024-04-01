@@ -1,0 +1,64 @@
+import asyncio
+import yaml
+import logging
+import ssl
+from DistributedNode import DistributedNode  # Assuming your node class is in this module
+from DirectoryServer import DirectoryServer  # Ensure this matches your file and class names
+
+def load_config(config_path="drops_config.yml"):
+    with open(config_path, "r") as file:
+        return yaml.safe_load(file)
+
+def setup_logging(log_config):
+    logging.basicConfig(filename=log_config.get("file", "drops_node.log"),
+                        level=log_config.get("level", "INFO").upper(),
+                        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+def setup_tls(tls_config):
+    if tls_config.get("tls_enabled", False):
+        ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+        ssl_context.load_cert_chain(certfile=tls_config.get("tls_cert_path"),
+                                    keyfile=tls_config.get("tls_key_path"))
+        return ssl_context
+    return None
+
+async def start_node(config):
+    node_config = config.get("node")
+    directory_services = config.get("directory_services", [])
+    ssl_context = setup_tls(config.get("security", {}))
+
+    node = DistributedNode(host=node_config.get("host"),
+                           port=node_config.get("port"),
+                           directory_nodes=directory_services,
+                           ssl_context=ssl_context)
+
+    await node.start()
+
+async def start_directory_server(config):
+    directory_config = config.get("directory_server")
+    if directory_config and directory_config.get("enabled", False):
+        server = DirectoryServer(directory_config.get("host", "0.0.0.0"), directory_config.get("port", 1512))
+        ssl_context = setup_tls(config.get("security", {}))
+        await server.run(ssl_context=ssl_context)
+
+async def start_system(config):
+    tasks = []
+    if config.get("directory_server", {}).get("enabled", False):
+        directory_task = asyncio.create_task(start_directory_server(config))
+        tasks.append(directory_task)
+
+    node_task = asyncio.create_task(start_node(config))
+    tasks.append(node_task)
+
+    await asyncio.gather(*tasks)
+
+
+def main(config_path="drops_config.yml"):
+    config = load_config(config_path)
+    setup_logging(config.get("logging", {}))
+
+    # Run the event loop to start the system components
+    asyncio.run(start_system(config))
+
+if __name__ == "__main__":
+    main()

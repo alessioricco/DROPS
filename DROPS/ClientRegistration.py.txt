@@ -1,0 +1,22 @@
+# NodeClient.py
+import asyncio
+import json
+import ssl
+
+async def register_with_directory(node_info, directory_host, directory_port, cafile):
+    ssl_context = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH, cafile=cafile)
+    reader, writer = await asyncio.open_connection(
+        directory_host, directory_port, ssl=ssl_context)
+
+    message = {'command': 'register', 'node': node_info}
+    writer.write(json.dumps(message).encode())
+    await writer.drain()
+
+    data = await reader.read(4096)
+    response = json.loads(data.decode())
+    print("Registration response:", response)
+    writer.close()
+
+# Example usage with SSL
+node_info = {'id': 'node1', 'host': '127.0.0.1', 'port': 8888}
+asyncio.run(register_with_directory(node_info, '127.0.0.1', 1512, 'ca_certificate.pem'))
