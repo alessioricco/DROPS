@@ -1,14 +1,10 @@
 import asyncio
-import json
-import ssl
-import logging
 
-from typing import List
 
-from ..common.configtools import read_config_file
 from ..common.logtools import logger
-from ..common.MessageEnvelope import MessageEnvelope, MessageType, _encode_message_envelope, _decode_message_envelope, _onMessageSend, _onMessageReceive
+from ..common.MessageEnvelope import MessageEnvelope, _onMessageReceive
 from ..common.MessageEnvelope import MessageBuilder
+from ..common.host import HostInfo
 from .HashRing import HashRing
 from .DistributedCache import DistributedCache
 from .HeartBeatManager import HeartBeatManager
@@ -16,21 +12,21 @@ from .Dispatcher import Dispatcher
 
 class DistributedNode:
 
-    def __init__(self, host:str, port:int, directory_nodes:set, ssl_context=None):
-        self.node_info = {'host': host, 'port': port}
-        self.host = host
-        self.port = port
+    def __init__(self, host_info:HostInfo, directory_nodes:set, ssl_context=None):
+        self.node_info:HostInfo = host_info #{'host': host, 'port': port}
+        # self.host = host
+        # self.port = port
         self.ssl_context = ssl_context  # SSL context for secure communication
         self.directory_nodes = directory_nodes  # List of directory nodes
-        self.known_nodes = set([(host, port)])  # Starts with itself known
+        self.known_nodes = set([self.node_info.to_tuple()])  # Starts with itself known
         
-        self.node_identifier = f"{host}:{port}"
-        self.hash_ring = HashRing(nodes=[self.node_identifier])
+        node_identifier = self.node_info.to_string() #f"{host}:{port}"
+        self.hash_ring = HashRing(nodes=[node_identifier])
 
         self.cache = DistributedCache(self.hash_ring)  # If your cache system is ready to use
         self.heartbeat_manager = HeartBeatManager(self)
         self.dispatcher = Dispatcher(self)
-        self.messageBuilder = MessageBuilder(self.node_identifier)
+        self.messageBuilder = MessageBuilder(node_identifier)
 
     async def handle_client(self, reader, writer):
         """
@@ -50,34 +46,17 @@ class DistributedNode:
 
     async def forward_request(self, node_identifier, action, key, value=None):
         # Assuming node_identifier format is "host:port"
-        host, port = node_identifier.split(':')
-        
+        # host, port = node_identifier.split(':')
+        host_info = HostInfo.from_string(node_identifier)
         try:
             # Use SSL if your system is designed to require it
-            reader, writer = await asyncio.open_connection(host, int(port), ssl=self.ssl_context)
+            reader, writer = await asyncio.open_connection(host_info.host, host_info.port, ssl=self.ssl_context)
 
-            # Construct and send the request
-            # request = {
-            #     "type": "node",  # Assuming you differentiate message types
-            #     "action": action,
-            #     "key": key
-            # }
-            
-            request:MessageEnvelope = MessageEnvelope(message_type = MessageType.NODE, command = action, sender = self.node_identifier, message = {"key": key, "value":value})
-            
-            # if value is not None:
-            #     request["value"] = value
+            request:MessageEnvelope = MessageBuilder.buildMessageCacheSet(key, value)
+            await request.send(writer)
+            # await writer.drain()
 
-            # writer.write(json.dumps(request).encode())
-            writer.write(_onMessageSend(request))
-            await writer.drain()
-
-            # Optionally wait for and process the response
-            # Depending on whether you expect/require a response for a forwarded request
-            # response_data = await reader.read(4096)
-            # response:MessageEnvelope = decode_message_envelope(response_data.decode())
-            response:MessageEnvelope = _onMessageReceive(await reader.read(4096))
-            # response = json.loads(response_data.decode())
+            response:MessageEnvelope = MessageEnvelope.receive(reader)
             logger.info(f"Received response from {node_identifier}: {response}")
 
             writer.close()
@@ -118,9 +97,9 @@ class DistributedNode:
 
     async def start(self):
         server = await asyncio.start_server(
-            self.handle_client, self.host, self.port, ssl=self.ssl_context)
+            self.handle_client, self.node_info.host, self.node_info.port, ssl=self.ssl_context)
         
-        logger.info(f"Node service active on {self.host}:{self.port}")
+        logger.info(f"Node service active on {self.node_info.to_string()}")
 
         # Start the heartbeat scheduler as a background task
         asyncio.create_task(self.heartbeat_manager.heartbeat_scheduler())

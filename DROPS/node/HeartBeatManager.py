@@ -1,5 +1,6 @@
 import asyncio
 import json
+from DROPS.common.host import HostInfo
 from DROPS.common.logtools import logger
 from DROPS.common.MessageEnvelope import MessageEnvelope, _onMessageSend
 
@@ -10,16 +11,15 @@ class HeartBeatManager:
         self.node = node
     
     async def send_heartbeat(self):
-        for node in list(self.node.known_nodes):
-            if node == (self.node.host, self.node.port):  # Skip self
-                continue
+        my_node_info: tuple[str, int] = self.node.node_info.to_tuple()
+        known_nodes = list(self.node.known_nodes)
+        known_nodes.remove(my_node_info)
+        for node in known_nodes:
             try:
                 reader, writer = await asyncio.open_connection(node[0], node[1], ssl=self.ssl_context)
-                # message:MessageEnvelope = buildMessageHeartbeat(self.node.node_identifier)
-                message:MessageEnvelope = self.node.messageBuilder.buildMessageHeartbeat()
-                # writer.write(json.dumps({'command': 'heartbeat'}).encode())
-                writer.write(_onMessageSend(message))
-                await writer.drain()
+                message: MessageEnvelope = self.node.messageBuilder.buildMessageHeartbeat()
+                await message.send(writer)
+                # await writer.drain()
                 writer.close()
             except Exception as e:
                 logger.error(f"Failed to send heartbeat to {node[0]}:{node[1]}: {e}")

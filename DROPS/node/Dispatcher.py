@@ -1,5 +1,6 @@
 from DROPS.common.logtools import logger
 from DROPS.common.MessageEnvelope import MessageEnvelope, MessageType
+from DROPS.common.timetools import time_execution
 from .Command import Command
 from .CommandNodeRegister import CommandNodeRegister
 from .CommandNodeDiscover import CommandNodeDiscover
@@ -7,6 +8,8 @@ from .CommandNodeCacheSet import CommandNodeCacheSet
 from .CommandClientCacheSet import CommandClientCacheSet
 
 class Dispatcher:
+    
+    __slots__ = ['node', 'command_handlers']
     
     def __init__(self, node):
         self.node = node
@@ -25,6 +28,7 @@ class Dispatcher:
                                         }
                                 }
     
+    # @time_execution
     async def dispatch(self, envelope: MessageEnvelope, writer):
         try:
             command:str = envelope.command

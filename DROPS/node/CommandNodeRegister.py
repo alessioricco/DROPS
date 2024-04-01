@@ -1,15 +1,16 @@
 import json
+
+from DROPS.common.MessageEnvelope import MessageBuilder, MessageEnvelope
 from .Command import Command
 
 
 class CommandNodeRegister(Command):
     
-    def __init__(self, node):
-        self.node = node
+    # def __init__(self, node):
+    #     super().__init__(node)
 
-    async def execute(self, message:dict, writer):
-
+    async def execute(self, message: dict, writer):
         self.node.known_nodes.add((message['host'], message['port']))
-        response = {'status': 'registered', 'nodes': list(self.node.known_nodes)}
-        writer.write(json.dumps(response).encode())
-        await writer.drain()
+        response: MessageEnvelope = self.node.messageBuilder.buildMessageNodeList(self.node.known_nodes)
+        await response.send(writer)
+        # await writer.drain()
